@@ -1,4 +1,137 @@
+; Определяем породы агентов
+breed [companies company]
 
+; Определяем свойства агентов
+companies-own [
+  field-of-activity    ; Сфера деятельности
+  budget               ; Бюджет
+  payback-period       ; Период окупаемости
+  profit               ; Прибыль/убытки
+]
+
+; Определяем глобальные переменные
+globals [
+  sum_regular_fin      ; Объем общего финансирования
+  sum_crisis           ; Объем кризисных ударов
+  sum_count_companies  ; Количество компаний на поле
+  count_med            ; Количество мед компаний на поле
+  count_IT             ; Количество IT компаний на поле
+  count_raw            ; Количество компаний сырьевой промышленности
+  count_retail         ; Количество компаний розничной торговли
+  count_banking        ; Количество банковских компаний
+]
+
+; Настройка начального состояния
+to setup
+  clear-all
+  set sum_regular_fin 0
+  set sum_crisis 0
+  set sum_count_companies 0
+  set count_med 0
+  set count_IT 0
+  set count_raw 0
+  set count_retail 0
+  set count_banking 0
+  reset-ticks
+end
+
+; Добавление компаний на поле
+to add-companies
+  create-companies Count_company [
+    setxy random-xcor random-ycor
+    set budget init_budget * (0.8 + random-float 0.4)  ; Начальный бюджет с разбросом от 0.8 до 1.2
+    set payback-period random payback_period         ; Рандомный период окупаемости
+    set profit profit_company                         ; Установка начального значения прибыли/убытков
+    set field-of-activity Field_of_activity           ; Установка сферы деятельности
+    set color determine-color Field_of_activity       ; Установка цвета в зависимости от сферы деятельности
+    update-counters field-of-activity 1               ; Обновление счетчиков компаний по сферам
+  ]
+end
+
+; Определение цвета компании в зависимости от сферы деятельности
+to-report determine-color [field]
+  ifelse field = "Medicine" [report green]
+  [ifelse field = "IT" [report blue]
+  [ifelse field = "Raw_materials" [report brown]
+  [ifelse field = "Retail_trade" [report orange]
+  [ifelse field = "Banking" [report red]
+  [report black]]]]]
+end
+
+; Обновление счетчиков компаний по сферам деятельности
+to update-counters [field delta]
+  set sum_count_companies sum_count_companies + delta
+  if field = "Medicine" [set count_med count_med + delta]
+  if field = "IT" [set count_IT count_IT + delta]
+  if field = "Raw_materials" [set count_raw count_raw + delta]
+  if field = "Retail_trade" [set count_retail count_retail + delta]
+  if field = "Banking" [set count_banking count_banking + delta]
+end
+
+; Регулярное финансирование компаний
+to regular-finance
+  if opportunity_reg_fin [
+    ask companies [
+      set budget budget + (regular_financing * gos_budget)
+    ]
+    set sum_regular_fin sum_regular_fin + (regular_financing * gos_budget * sum_count_companies)
+  ]
+end
+
+; Начальное финансирование компаний
+to initial-finance
+  if opportunity_init_fin [
+    let initial_amount (init_financing * gos_budget / sum_count_companies)
+    ask companies [
+      set budget budget + initial_amount
+    ]
+  ]
+end
+
+; Финансирование компаний на грани краха
+to sos-finance
+  if help_bankroty [
+    ask companies with [budget < 10000] [ ; Условие, если бюджет компании меньше 10000
+      set budget budget + sos_financing
+    ]
+  ]
+end
+
+; Имитация финансового кризиса
+to big-crisis
+  ask companies [
+    set budget budget - 1000000
+  ]
+  set sum_crisis sum_crisis + 1000000 * sum_count_companies
+end
+
+to medium-crisis
+  ask companies [
+    set budget budget - 500000
+  ]
+  set sum_crisis sum_crisis + 500000 * sum_count_companies
+end
+
+to easy-crisis
+  ask companies [
+    set budget budget - 150000
+  ]
+  set sum_crisis sum_crisis + 150000 * sum_count_companies
+end
+
+; Шаг модели
+to go
+  regular-finance
+  sos-finance
+  ask companies [
+    ; Действия компаний на каждом шаге
+    if ticks > payback-period [
+      set profit profit + 0.01 * budget  ; Прибыль после окупаемости
+      set budget budget + profit
+    ]
+  ]
+  tick
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 860
@@ -457,7 +590,7 @@ BUTTON
 795
 380
 add_companies
-NIL
+add-companies
 NIL
 1
 T
