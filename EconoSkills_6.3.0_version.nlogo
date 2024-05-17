@@ -24,6 +24,7 @@ globals [
 ; Настройка начального состояния
 to setup
   clear-all
+  clear-turtles   ; Очищаем всех агентов с поля
   set sum_regular_fin 0
   set sum_crisis 0
   set sum_count_companies 0
@@ -39,6 +40,8 @@ end
 to add-companies
   create-companies Count_company [
     setxy random-xcor random-ycor
+    set shape "person"                       ; Устанавливаем форму агента "человечек"
+    set size 1.5                             ; Размер агента
     set budget init_budget * (0.8 + random-float 0.4)  ; Начальный бюджет с разбросом от 0.8 до 1.2
     set payback-period random payback_period         ; Рандомный период окупаемости
     set profit profit_company                         ; Установка начального значения прибыли/убытков
@@ -50,7 +53,7 @@ end
 
 ; Определение цвета компании в зависимости от сферы деятельности
 to-report determine-color [field]
-  ifelse field = "Medicine" [report green]
+  ifelse field = "Medicine" [report pink]
   [ifelse field = "IT" [report blue]
   [ifelse field = "Raw_materials" [report brown]
   [ifelse field = "Retail_trade" [report orange]
@@ -71,19 +74,25 @@ end
 ; Регулярное финансирование компаний
 to regular-finance
   if opportunity_reg_fin [
-    ask companies [
-      set budget budget + (regular_financing * gos_budget)
+    let total-financing regular_financing * count companies
+    if gos_budget >= total-financing [
+      ask companies [
+        set budget budget + regular_financing
+      ]
+      set gos_budget gos_budget - total-financing
     ]
-    set sum_regular_fin sum_regular_fin + (regular_financing * gos_budget * sum_count_companies)
   ]
 end
 
 ; Начальное финансирование компаний
-to initial-finance
+to init-finance
   if opportunity_init_fin [
-    let initial_amount (init_financing * gos_budget / sum_count_companies)
-    ask companies [
-      set budget budget + initial_amount
+    let total-financing init_financing * count companies
+    if gos_budget >= total-financing [
+      ask companies [
+        set budget budget + init_financing
+      ]
+      set gos_budget gos_budget - total-financing
     ]
   ]
 end
@@ -91,8 +100,11 @@ end
 ; Финансирование компаний на грани краха
 to sos-finance
   if help_bankroty [
-    ask companies with [budget < 10000] [ ; Условие, если бюджет компании меньше 10000
-      set budget budget + sos_financing
+    ask companies with [budget < sos_financing] [
+      if gos_budget >= sos_financing [
+        set budget budget + sos_financing
+        set gos_budget gos_budget - sos_financing
+      ]
     ]
   ]
 end
@@ -129,8 +141,48 @@ to go
       set profit profit + 0.01 * budget  ; Прибыль после окупаемости
       set budget budget + profit
     ]
+    if budget < 0 [
+      update-counters field-of-activity -1
+      die
+    ]
+    move-company
   ]
   tick
+  update-plots  ; Обновление графиков на каждом шаге
+end
+
+; Движение компании и отталкивание от стенок
+to move-company
+  rt random 50 - random 50
+  fd 1
+  if xcor > max-pxcor or xcor < min-pxcor [ rt 180 ]
+  if ycor > max-pycor or ycor < min-pycor [ rt 180 ]
+end
+
+; Демонстрация - создание компаний всех сфер и запуск движения
+to demo
+  setup
+  let sectors ["Medicine" "IT" "Raw_materials" "Retail_trade" "Banking"]
+  foreach sectors [ sector ->
+    set Field_of_activity sector
+    create-companies 7 [
+      setxy random-xcor random-ycor
+      set shape "person"
+      set size 1.5
+      set budget init_budget * (0.8 + random-float 0.4)
+      set payback-period payback_period
+      set profit profit_company
+      set field-of-activity Field_of_activity
+      set color determine-color Field_of_activity
+      update-counters field-of-activity 1
+    ]
+  ]
+  go
+end
+
+; Шаг модели (один тик)
+to go-once
+  go
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -189,7 +241,7 @@ gos_budget
 gos_budget
 0
 1000000
-100000.0
+973897.5
 100
 1
 NIL
@@ -204,7 +256,7 @@ regular_financing
 regular_financing
 0
 10
-1.0
+1.5
 0.5
 1
 NIL
@@ -227,7 +279,7 @@ SWITCH
 276
 help_bankroty
 help_bankroty
-1
+0
 1
 -1000
 
@@ -247,7 +299,7 @@ BUTTON
 98
 381
 Big_crisis
-NIL
+big-crisis
 NIL
 1
 T
@@ -264,7 +316,7 @@ BUTTON
 233
 381
 Medium_crisis
-NIL
+medium-crisis
 NIL
 1
 T
@@ -281,7 +333,7 @@ BUTTON
 345
 381
 Easy_crisis
-NIL
+easy-crisis
 NIL
 1
 T
@@ -361,7 +413,7 @@ init_budget
 init_budget
 0
 100000
-20000.0
+27390.0
 10
 1
 NIL
@@ -394,7 +446,7 @@ SWITCH
 184
 opportunity_reg_fin
 opportunity_reg_fin
-1
+0
 1
 -1000
 
@@ -417,7 +469,7 @@ init_financing
 init_financing
 0
 1000
-50.0
+60.0
 10
 1
 NIL
@@ -430,7 +482,7 @@ SWITCH
 229
 opportunity_init_fin
 opportunity_init_fin
-1
+0
 1
 -1000
 
@@ -467,7 +519,7 @@ CHOOSER
 Field_of_activity
 Field_of_activity
 "Medicine" "IT" "Raw_materials" "Retail_trade" "Banking"
-0
+1
 
 TEXTBOX
 496
@@ -508,7 +560,7 @@ payback_period
 payback_period
 0
 5000
-1000.0
+350.0
 10
 1
 NIL
@@ -533,7 +585,7 @@ count_company
 count_company
 0
 100
-20.0
+15.0
 1
 1
 NIL
@@ -568,7 +620,7 @@ profit_company
 profit_company
 0
 500
-200.0
+340.0
 10
 1
 NIL
@@ -607,7 +659,7 @@ BUTTON
 1124
 645
 setup
-NIL
+setup
 NIL
 1
 T
@@ -624,8 +676,8 @@ BUTTON
 1360
 645
 go
-NIL
-NIL
+go
+T
 1
 T
 OBSERVER
@@ -683,17 +735,17 @@ PLOT
 383
 628
 Бюджет государственного фонда
-NIL
-NIL
+ticks
+budget
 0.0
 10.0
 0.0
 10.0
 true
 false
-"" ""
+"" "plot gos_budget\n"
 PENS
-"default" 1.0 0 -16777216 true "" "plot count turtles"
+"State Budget" 1.0 0 -16777216 true "" "plot gos_budget"
 
 TEXTBOX
 458
@@ -711,17 +763,21 @@ PLOT
 839
 628
 Экономическое состояние типов компаний
-NIL
-NIL
+ticks
+budget
 0.0
 10.0
 0.0
 10.0
 true
 false
-"" ""
+"" "set-current-plot-pen \"Medicine\"\nplot sum [budget] of companies with [field-of-activity = \"Medicine\"]\n\nset-current-plot-pen \"IT\"\nplot sum [budget] of companies with [field-of-activity = \"IT\"]\n\nset-current-plot-pen \"Raw_materials\"\nplot sum [budget] of companies with [field-of-activity = \"Raw_materials\"]\n\nset-current-plot-pen \"Retail_trade\"\nplot sum [budget] of companies with [field-of-activity = \"Retail_trade\"]\n\nset-current-plot-pen \"Banking\"\nplot sum [budget] of companies with [field-of-activity = \"Banking\"]\n"
 PENS
-"default" 1.0 0 -16777216 true "" "plot count turtles"
+"\"Medicine\"" 1.0 0 -1664597 true "" "plot sum [budget] of companies with [field-of-activity = \"Medicine\"]"
+"\"IT\"" 1.0 0 -13791810 true "" "plot sum [budget] of companies with [field-of-activity = \"IT\"]"
+"\"Raw_materials\"" 1.0 0 -6459832 true "" "plot sum [budget] of companies with [field-of-activity = \"Raw_materials\"]"
+"\"Retail_trade\"" 1.0 0 -955883 true "" "plot sum [budget] of companies with [field-of-activity = \"Retail_trade\"]"
+"\"Banking\"" 1.0 0 -2674135 true "" "plot sum [budget] of companies with [field-of-activity = \"Banking\"]"
 
 MONITOR
 417
@@ -812,7 +868,7 @@ BUTTON
 1197
 645
 demo
-NIL
+demo
 NIL
 1
 T
